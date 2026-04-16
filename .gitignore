@@ -1,0 +1,32 @@
+# Virtual environments
+venv/
+env/
+
+# Node.js dependencies
+node_modules/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment files
+.env
+*.env
+
+# IDE settings
+.idea/
+.vscode/
+
+# Build and distribution
+build/
+dist/
+
+# Logs and temp files
+*.log
+*.tmp
+
+# Large binaries
+*.dll
+*.dat

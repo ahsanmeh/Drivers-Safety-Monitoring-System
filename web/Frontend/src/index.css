@@ -1,0 +1,134 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Global font size reduction for mobile-friendly viewing */
+html {
+  font-size: 14px; /* Reduced from default 16px */
+}
+
+/* Reduce heading sizes globally */
+
+
+h2 {
+  font-size: 1.25rem !important; /* Reduced from typical 1.5-2rem */
+  line-height: 1.5rem !important;
+}
+
+h3 {
+  font-size: 1.125rem !important; /* Reduced from typical 1.25-1.5rem */
+  line-height: 1.375rem !important;
+}
+
+h4 {
+  font-size: 1rem !important;
+  line-height: 1.25rem !important;
+}
+
+h5 {
+  font-size: 0.875rem !important;
+  line-height: 1.125rem !important;
+}
+
+h6 {
+  font-size: 0.75rem !important;
+  line-height: 1rem !important;
+}
+
+/* Reduce paragraph and body text */
+p {
+  font-size: 0.875rem !important; /* Reduced from default 1rem */
+  line-height: 1.25rem !important;
+}
+
+/* Reduce button text sizes */
+button {
+  font-size: 0.875rem !important;
+}
+
+/* Reduce input text sizes */
+input, textarea, select {
+  font-size: 0.875rem !important;
+}
+
+/* Reduce label text sizes */
+label {
+  font-size: 0.75rem !important;
+}
+
+/* Reduce small text sizes */
+.text-xs {
+  font-size: 0.65rem !important;
+  line-height: 0.9rem !important;
+}
+
+.text-sm {
+  font-size: 0.75rem !important;
+  line-height: 1rem !important;
+}
+
+/* Reduce icon sizes proportionally */
+svg {
+  width: 0.875em !important;
+  height: 0.875em !important;
+}
+
+/* Specific adjustments for common Tailwind classes */
+.text-3xl {
+  font-size: 1.5rem !important;
+  line-height: 2rem !important;
+}
+
+.text-2xl {
+  font-size: 1.25rem !important;
+  line-height: 1.75rem !important;
+}
+
+.text-xl {
+  font-size: 1.125rem !important;
+  line-height: 1.75rem !important;
+}
+
+.text-lg {
+  font-size: 1rem !important;
+  line-height: 1.5rem !important;
+}
+
+.text-base {
+  font-size: 0.875rem !important;
+  line-height: 1.25rem !important;
+}
