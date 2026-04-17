@@ -6,7 +6,13 @@ import { reportAPI } from '../services/api';
 import { toast } from 'react-hot-toast';
 import { io } from 'socket.io-client';
 
-const BACKEND_URL = `http://${window.location.hostname}:5000`;
+const getBackendUrl = () => {
+  if (process.env.REACT_APP_API_URL) {
+    return process.env.REACT_APP_API_URL.replace(/\/api$/, '');
+  }
+  return `http://${window.location.hostname}:5000`;
+};
+const BACKEND_URL = getBackendUrl();
 
 const Dashboard = () => {
   const [user, setUser] = useState(null);

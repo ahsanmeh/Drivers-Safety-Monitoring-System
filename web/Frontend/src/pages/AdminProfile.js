@@ -24,7 +24,13 @@ import { userAPI } from '../services/api';
 import { toast } from 'react-hot-toast';
 import UserSettingsModal from '../components/UserSettingsModal';
 
-const BACKEND_URL = `http://${window.location.hostname}:5000`;
+const getBackendUrl = () => {
+    if (process.env.REACT_APP_API_URL) {
+        return process.env.REACT_APP_API_URL.replace(/\/api$/, '');
+    }
+    return `http://${window.location.hostname}:5000`;
+};
+const BACKEND_URL = getBackendUrl();
 
 const AdminProfile = () => {
     const [user, setUser] = useState(null);

@@ -5,7 +5,13 @@ import { userAPI } from '../services/api';
 import { io } from 'socket.io-client';
 import { toast } from 'react-hot-toast';
 
-const BACKEND_URL = `http://${window.location.hostname}:5000`;
+const getBackendUrl = () => {
+    if (process.env.REACT_APP_API_URL) {
+        return process.env.REACT_APP_API_URL.replace(/\/api$/, '');
+    }
+    return `http://${window.location.hostname}:5000`;
+};
+const BACKEND_URL = getBackendUrl();
 
 const LiveMonitorPage = () => {
     const [user, setUser] = useState(null);
@@ -119,7 +125,9 @@ const LiveMonitorPage = () => {
         try {
             const response = await userAPI.getAllDrivers();
             if (response.success) {
-                setDrivers(response.data);
+                // Filter to only show active (approved) drivers
+                const activeDrivers = response.data.filter(driver => driver.isActive === true);
+                setDrivers(activeDrivers);
             }
         } catch (error) {
             console.error('Failed to fetch drivers:', error);

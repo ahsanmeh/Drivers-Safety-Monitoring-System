@@ -25,7 +25,13 @@ import {
 } from 'react-icons/fi';
 import { userAPI } from '../services/api';
 
-const BACKEND_URL = `http://${window.location.hostname}:5000`;
+const getBackendUrl = () => {
+    if (process.env.REACT_APP_API_URL) {
+        return process.env.REACT_APP_API_URL.replace(/\/api$/, '');
+    }
+    return `http://${window.location.hostname}:5000`;
+};
+const BACKEND_URL = getBackendUrl();
 
 const UsersPage = () => {
   const [user, setUser] = useState(null);

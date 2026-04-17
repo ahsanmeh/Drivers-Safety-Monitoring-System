@@ -20,7 +20,13 @@ import ChangePasswordModal from '../components/ChangePasswordModal';
 import PasswordExpiryAlert from '../components/PasswordExpiryAlert';
 import { FiSettings } from 'react-icons/fi';
 
-const BACKEND_URL = `http://${window.location.hostname}:5000`;
+const getBackendUrl = () => {
+    if (process.env.REACT_APP_API_URL) {
+        return process.env.REACT_APP_API_URL.replace(/\/api$/, '');
+    }
+    return `http://${window.location.hostname}:5000`;
+};
+const BACKEND_URL = getBackendUrl();
 
 const DriverDashboard = () => {
   const [user, setUser] = useState(null);

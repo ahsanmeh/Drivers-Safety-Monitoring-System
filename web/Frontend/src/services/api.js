@@ -1,4 +1,7 @@
 const getApiBaseUrl = () => {
+  if (process.env.REACT_APP_API_URL) {
+    return process.env.REACT_APP_API_URL;
+  }
   const hostname = window.location.hostname;
   return `http://${hostname}:5000/api`;
 };

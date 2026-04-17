@@ -8,7 +8,13 @@ import {
   FiX
 } from 'react-icons/fi';
 
-const BACKEND_URL = `http://${window.location.hostname}:5000`;
+const getBackendUrl = () => {
+    if (process.env.REACT_APP_API_URL) {
+        return process.env.REACT_APP_API_URL.replace(/\/api$/, '');
+    }
+    return `http://${window.location.hostname}:5000`;
+};
+const BACKEND_URL = getBackendUrl();
 
 const DashboardLayout = ({ children, user, activePage, navigationItems }) => {
   const navigate = useNavigate();
