@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { faceLogin, manualLogin } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Speech from 'expo-speech';
 
 // Only import Vision Camera on native platforms (frame processor disabled for stability)
 let Camera: any, useCameraDevice: any, useCameraPermission: any;
@@ -183,16 +184,37 @@ export default function FaceLoginScreen() {
       const result = await faceLogin(photoUri);
       console.log('✅ Face login successful');
 
+      // 🚫 Block admin access - app is for drivers only
+      if (result.user?.role === 'admin') {
+        Alert.alert(
+          'Access Denied',
+          'This app is for drivers only. Please use the web dashboard to manage your fleet.',
+          [{ text: 'OK' }]
+        );
+        setIsCapturing(false);
+        setHasAttempted(false);
+        setScanStatus('Position your face in the frame...');
+        return;
+      }
+
       setAuth({ user: result.user, token: result.token });
       setSuccessUser(result.user);
       setShowSuccess(true);
       setShowCamera(false); // 🛑 Disable camera immediately after successful auth
 
-      // Auto navigate after 2 seconds
+      // 🔊 Voice welcome message
+      const driverName = result.user?.name || 'Driver';
+      Speech.speak(`Welcome back, ${driverName}. Drive safely!`, {
+        language: 'en-US',
+        pitch: 1.0,
+        rate: 0.9,
+      });
+
+      // Auto navigate after 3 seconds (longer to hear the voice)
       setTimeout(() => {
         setShowSuccess(false);
         router.replace('/(tabs)');
-      }, 2000);
+      }, 3000);
     } catch (err: any) {
       console.log('❌ Face auth failed:', err.message);
       setScanStatus('Face not recognized - retrying...');
@@ -235,16 +257,36 @@ export default function FaceLoginScreen() {
     try {
       setIsManualSubmitting(true);
       const result = await manualLogin(email.trim().toLowerCase(), password);
+
+      // 🚫 Block admin access - app is for drivers only
+      if (result.user?.role === 'admin') {
+        Alert.alert(
+          'Access Denied',
+          'This app is for drivers only. Please use the web dashboard to manage your fleet.',
+          [{ text: 'OK' }]
+        );
+        setIsManualSubmitting(false);
+        return;
+      }
+
       setAuth({ user: result.user, token: result.token });
       setSuccessUser(result.user);
       setShowSuccess(true);
       setShowPasswordModal(false);
 
-      // Auto navigate after 2 seconds
+      // 🔊 Voice welcome message
+      const driverName = result.user?.name || 'Driver';
+      Speech.speak(`Welcome back, ${driverName}. Drive safely!`, {
+        language: 'en-US',
+        pitch: 1.0,
+        rate: 0.9,
+      });
+
+      // Auto navigate after 3 seconds (longer to hear the voice)
       setTimeout(() => {
         setShowSuccess(false);
         router.replace('/(tabs)');
-      }, 2000);
+      }, 3000);
     } catch (err: any) {
       Alert.alert('Login failed', err.message ?? 'Unable to sign in');
     } finally {

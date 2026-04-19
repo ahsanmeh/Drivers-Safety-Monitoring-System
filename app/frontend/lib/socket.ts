@@ -1,7 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 
 // Backend URL (MUST MATCH your api.ts!)
-const BACKEND_URL = 'http://192.168.1.5:5000';
+const BACKEND_URL = 'http://192.168.1.9:5000';
 
 let socket: Socket | null = null;
 
