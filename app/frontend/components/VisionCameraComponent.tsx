@@ -192,11 +192,11 @@ export const VisionCameraComponent: React.FC<VisionCameraComponentProps> = ({ is
                 });
 
                 if (photo?.path) {
-                    // 1. Compress and Resize image for streaming (480p for better detection)
+                    // 1. Compress and Resize image for streaming (320p is enough for AI and saves RAM)
                     const manipulatedImage = await ImageManipulator.manipulateAsync(
                         `file://${photo.path}`,
-                        [{ resize: { height: 480 } }], // 480p is the sweet spot for YOLO accuracy
-                        { compress: 0.5, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+                        [{ resize: { height: 320 } }], 
+                        { compress: 0.3, format: ImageManipulator.SaveFormat.JPEG, base64: true }
                     );
                     const base64 = manipulatedImage.base64;
 
@@ -208,40 +208,39 @@ export const VisionCameraComponent: React.FC<VisionCameraComponentProps> = ({ is
                         });
                     }
 
-                    // Send to ML API (throttled to every 1.2 seconds for stability)
+                    // Send to ML API (throttled to every 2 seconds + wait for previous to finish)
                     const now = Date.now();
-                    if (now - lastMLCheck.current >= 1200 && base64) {
+                    if (now - lastMLCheck.current >= 2000 && base64) {
                         lastMLCheck.current = now;
-                        lastMLCheck.current = now;
-                        monitorMobile(token, base64, locationRef.current)
-                            .then(result => {
-                                if (result.detected) {
-                                    console.log('📱 MOBILE DETECTED');
-                                    setActiveAlert('MOBILE PHONE');
-                                    playAlertSound('MOBILE PHONE');
-                                    setTimeout(() => setActiveAlert(null), 3000);
-                                } else if (result.drowsiness?.is_drowsy) {
-                                    console.log('😴 DROWSINESS DETECTED');
-                                    setActiveAlert('DROWSINESS');
-                                    playAlertSound('DROWSINESS');
-                                    setTimeout(() => setActiveAlert(null), 3000);
-                                } else if (result.drowsiness?.is_yawning) {
-                                    console.log('🥱 YAWNING DETECTED');
-                                    setActiveAlert('YAWNING');
-                                    playAlertSound('YAWNING');
-                                    setTimeout(() => setActiveAlert(null), 3000);
-                                }
-                            })
-
-
-                            .catch(() => {
-                                // Silent fail
-                            });
+                        
+                        // Keep isCapturing = true until the server replies!
+                        try {
+                            const result = await monitorMobile(token, base64, locationRef.current);
+                            if (result.detected) {
+                                console.log('📱 MOBILE DETECTED');
+                                setActiveAlert('MOBILE PHONE');
+                                playAlertSound('MOBILE PHONE');
+                                setTimeout(() => setActiveAlert(null), 3000);
+                            } else if (result.drowsiness?.is_drowsy) {
+                                console.log('😴 DROWSINESS DETECTED');
+                                setActiveAlert('DROWSINESS');
+                                playAlertSound('DROWSINESS');
+                                setTimeout(() => setActiveAlert(null), 3000);
+                            } else if (result.drowsiness?.is_yawning) {
+                                console.log('🥱 YAWNING DETECTED');
+                                setActiveAlert('YAWNING');
+                                playAlertSound('YAWNING');
+                                setTimeout(() => setActiveAlert(null), 3000);
+                            }
+                        } catch (err) {
+                            console.log('ML Request failed or timed out, skipping frame');
+                        }
                     }
                 }
             } catch (error) {
                 console.warn('Frame capture error:', error);
             } finally {
+                // Now we are ready for the next photo
                 isCapturing.current = false;
             }
         };

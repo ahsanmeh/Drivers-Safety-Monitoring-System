@@ -1,7 +1,9 @@
 import { io, Socket } from 'socket.io-client';
+import { API_ROOT } from './api';
 
-// Backend URL (MUST MATCH your api.ts!)
-const BACKEND_URL = 'http://192.168.1.9:5000';
+// Backend URL is derived from api.ts so it always matches (local or cloud)
+const BACKEND_URL = API_ROOT;
+
 
 let socket: Socket | null = null;
 
@@ -12,6 +14,9 @@ export const initializeSocket = (vehicleId?: string) => {
             reconnection: true,
             reconnectionAttempts: 5,
             reconnectionDelay: 1000,
+            extraHeaders: {
+                'ngrok-skip-browser-warning': 'true'
+            }
         });
 
         socket.on('connect', () => {

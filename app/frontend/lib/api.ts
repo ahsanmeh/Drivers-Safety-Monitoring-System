@@ -1,5 +1,47 @@
-export const API_BASE_URL = 'http://192.168.1.9:5000/api';
+export const API_BASE_URL = 'https://driver-safety-backend.onrender.com/api';
 export const API_ROOT = API_BASE_URL.replace(/\/api$/, '');
+
+// Wrapper to bypass ngrok browser warning and handle JSON errors
+async function customFetch(input: string, init?: RequestInit) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), 25000); // 25s timeout for cloud AI
+
+  const headers = {
+    ...init?.headers,
+    'ngrok-skip-browser-warning': 'true', // Required to bypass ngrok's HTML warning page
+  };
+
+  try {
+    const res = await fetch(input, {
+      ...init,
+      headers,
+      signal: controller.signal
+    });
+    clearTimeout(id);
+
+    // Clone to safely read text if json parsing fails
+    const resClone = res.clone();
+    let json;
+    try {
+      json = await res.json();
+    } catch (err) {
+      const text = await resClone.text();
+      console.error('🔴 API JSON Parse Error. Response starts with:', text.substring(0, 100));
+      if (text.includes('ngrok')) {
+        throw new Error('Ngrok connection issue. Please check your tunnel.');
+      }
+      throw new Error('Server returned invalid data format.');
+    }
+
+    return { res, json };
+  } catch (error: any) {
+    clearTimeout(id);
+    if (error.name === 'AbortError') {
+      throw new Error('Request timed out. Server is taking too long to respond.');
+    }
+    throw error;
+  }
+}
 
 export interface AuthPayload {
   user: any;
@@ -18,12 +60,11 @@ export async function faceLogin(imageUri: string): Promise<FaceAuthPayload> {
     type: 'image/jpeg',
   } as any);
 
-  const res = await fetch(`${API_BASE_URL}/auth/face-login`, {
+  const { res, json } = await customFetch(`${API_BASE_URL}/auth/face-login`, {
     method: 'POST',
     body: formData,
   });
 
-  const json = await res.json();
   if (!res.ok || !json.success) {
     throw new Error(json.message || 'Face login failed');
   }
@@ -32,7 +73,7 @@ export async function faceLogin(imageUri: string): Promise<FaceAuthPayload> {
 }
 
 export async function manualLogin(email: string, password: string): Promise<AuthPayload> {
-  const res = await fetch(`${API_BASE_URL}/auth/login`, {
+  const { res, json } = await customFetch(`${API_BASE_URL}/auth/login`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -40,7 +81,6 @@ export async function manualLogin(email: string, password: string): Promise<Auth
     body: JSON.stringify({ email, password }),
   });
 
-  const json = await res.json();
   if (!res.ok || !json.success) {
     throw new Error(json.message || 'Login failed');
   }
@@ -61,7 +101,7 @@ export interface IncidentResponse {
 }
 
 export async function fetchDriverIncidents(token: string, driverId: string): Promise<IncidentResponse> {
-  const res = await fetch(`${API_BASE_URL}/incidents/driver/${driverId}?limit=100`, {
+  const { res, json } = await customFetch(`${API_BASE_URL}/incidents/driver/${driverId}?limit=100`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
@@ -69,14 +109,10 @@ export async function fetchDriverIncidents(token: string, driverId: string): Pro
     },
   });
 
-  const json = await res.json();
-  console.log('📡 API Response:', JSON.stringify(json, null, 2));
-
   if (!res.ok || !json.success) {
     throw new Error(json.message || 'Failed to fetch incidents');
   }
 
-  // API returns data as array directly, not wrapped in 'incidents'
   return {
     incidents: json.data || [],
     pagination: json.pagination,
@@ -84,7 +120,7 @@ export async function fetchDriverIncidents(token: string, driverId: string): Pro
 }
 
 export async function updateDrivingTime(token: string, seconds: number): Promise<any> {
-  const res = await fetch(`${API_BASE_URL}/auth/update-driving-time`, {
+  const { res, json } = await customFetch(`${API_BASE_URL}/auth/update-driving-time`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -93,7 +129,6 @@ export async function updateDrivingTime(token: string, seconds: number): Promise
     body: JSON.stringify({ seconds }),
   });
 
-  const json = await res.json();
   if (!res.ok || !json.success) {
     throw new Error(json.message || 'Failed to update driving time');
   }
@@ -102,7 +137,7 @@ export async function updateDrivingTime(token: string, seconds: number): Promise
 }
 
 export async function updateIncidentLocation(token: string, incidentId: string, location: { latitude: number; longitude: number; address?: string }): Promise<any> {
-  const res = await fetch(`${API_BASE_URL}/incidents/${incidentId}/location`, {
+  const { res, json } = await customFetch(`${API_BASE_URL}/incidents/${incidentId}/location`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -119,7 +154,6 @@ export async function updateIncidentLocation(token: string, incidentId: string, 
     }),
   });
 
-  const json = await res.json();
   if (!res.ok || !json.success) {
     throw new Error(json.message || 'Failed to update incident location');
   }
@@ -128,7 +162,7 @@ export async function updateIncidentLocation(token: string, incidentId: string, 
 }
 
 export async function updateProfile(token: string, data: any): Promise<any> {
-  const res = await fetch(`${API_BASE_URL}/auth/me`, {
+  const { res, json } = await customFetch(`${API_BASE_URL}/auth/me`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -137,7 +171,6 @@ export async function updateProfile(token: string, data: any): Promise<any> {
     body: JSON.stringify(data),
   });
 
-  const json = await res.json();
   if (!res.ok || !json.success) {
     throw new Error(json.message || 'Failed to update profile');
   }
@@ -153,7 +186,7 @@ export async function uploadProfileImage(token: string, imageUri: string): Promi
     type: 'image/jpeg',
   } as any);
 
-  const res = await fetch(`${API_BASE_URL}/auth/upload-profile-image`, {
+  const { res, json } = await customFetch(`${API_BASE_URL}/auth/upload-profile-image`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -161,7 +194,6 @@ export async function uploadProfileImage(token: string, imageUri: string): Promi
     body: formData,
   });
 
-  const json = await res.json();
   if (!res.ok || !json.success) {
     throw new Error(json.message || 'Failed to upload profile image');
   }
@@ -170,14 +202,13 @@ export async function uploadProfileImage(token: string, imageUri: string): Promi
 }
 
 export async function incrementSafeTripCount(token: string): Promise<any> {
-  const res = await fetch(`${API_BASE_URL}/auth/increment-safe-trip`, {
+  const { res, json } = await customFetch(`${API_BASE_URL}/auth/increment-safe-trip`, {
     method: 'PUT',
     headers: {
       'Authorization': `Bearer ${token}`,
     },
   });
 
-  const json = await res.json();
   if (!res.ok || !json.success) {
     throw new Error(json.message || 'Failed to increment safe trip count');
   }
@@ -186,7 +217,7 @@ export async function incrementSafeTripCount(token: string): Promise<any> {
 }
 
 export async function monitorMobile(token: string, base64: string, location?: { latitude: number; longitude: number }): Promise<any> {
-  const res = await fetch(`${API_BASE_URL}/monitor/mobile`, {
+  const { res, json } = await customFetch(`${API_BASE_URL}/monitor/mobile`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -195,7 +226,6 @@ export async function monitorMobile(token: string, base64: string, location?: { 
     body: JSON.stringify({ image: base64, location }),
   });
 
-  const json = await res.json();
   if (!res.ok) {
     throw new Error(json.message || 'Mobile monitoring failed');
   }
@@ -204,7 +234,7 @@ export async function monitorMobile(token: string, base64: string, location?: { 
 }
 
 export async function dismissIncident(token: string, incidentId: string): Promise<any> {
-  const res = await fetch(`${API_BASE_URL}/incidents/${incidentId}/dismiss`, {
+  const { res, json } = await customFetch(`${API_BASE_URL}/incidents/${incidentId}/dismiss`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -212,7 +242,6 @@ export async function dismissIncident(token: string, incidentId: string): Promis
     },
   });
 
-  const json = await res.json();
   if (!res.ok || !json.success) {
     throw new Error(json.message || 'Failed to dismiss incident');
   }
