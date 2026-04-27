@@ -225,6 +225,14 @@ const userSchema = new mongoose.Schema({
         min: [1, 'Account lock duration must be at least 1 minute']
       }
     }
+  },
+  lastLocation: {
+    latitude: Number,
+    longitude: Number,
+    timestamp: {
+      type: Date,
+      default: Date.now
+    }
   }
 }, {
   timestamps: true

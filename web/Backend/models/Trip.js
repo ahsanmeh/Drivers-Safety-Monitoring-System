@@ -15,50 +15,37 @@ const tripSchema = new mongoose.Schema({
   },
   assignedVehicle: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Vehicle',
-    required: [true, 'Vehicle assignment is required']
+    ref: 'Vehicle'
+    // Not required — auto-sessions may not have a vehicle assigned
   },
   startLocation: {
     address: {
       type: String,
-      required: [true, 'Start address is required'],
-      trim: true
+      trim: true,
+      default: 'Unknown Start Location'
     },
     coordinates: {
-      latitude: {
-        type: Number,
-        required: [true, 'Start latitude is required']
-      },
-      longitude: {
-        type: Number,
-        required: [true, 'Start longitude is required']
-      }
+      latitude: { type: Number, default: 0 },
+      longitude: { type: Number, default: 0 }
     }
   },
   endLocation: {
     address: {
       type: String,
-      required: [true, 'End address is required'],
       trim: true
     },
     coordinates: {
-      latitude: {
-        type: Number,
-        required: [true, 'End latitude is required']
-      },
-      longitude: {
-        type: Number,
-        required: [true, 'End longitude is required']
-      }
+      latitude: { type: Number },
+      longitude: { type: Number }
     }
   },
   scheduledStartTime: {
     type: Date,
-    required: [true, 'Scheduled start time is required']
+    default: Date.now
   },
   scheduledEndTime: {
-    type: Date,
-    required: [true, 'Scheduled end time is required']
+    type: Date
+    // Not required — auto-sessions have no scheduled end time
   },
   actualStartTime: {
     type: Date
@@ -71,16 +58,33 @@ const tripSchema = new mongoose.Schema({
     enum: ['scheduled', 'in_progress', 'completed', 'cancelled', 'delayed'],
     default: 'scheduled'
   },
+  isAutoSession: {
+    type: Boolean,
+    default: false
+    // true = auto-created when driver goes online
+  },
   distance: {
     type: Number,
     min: [0, 'Distance cannot be negative']
   },
   estimatedDuration: {
-    type: Number, // in minutes
-    min: [0, 'Duration cannot be negative']
+    type: Number // in minutes
   },
   actualDuration: {
     type: Number // in minutes
+  },
+  routeHistory: [{
+    latitude: Number,
+    longitude: Number,
+    timestamp: {
+      type: Date,
+      default: Date.now
+    }
+  }],
+  currentPosition: {
+    latitude: Number,
+    longitude: Number,
+    lastUpdated: Date
   },
   notes: {
     type: String,
@@ -96,6 +100,7 @@ tripSchema.index({ assignedDriver: 1 });
 tripSchema.index({ assignedVehicle: 1 });
 tripSchema.index({ status: 1 });
 tripSchema.index({ scheduledStartTime: 1 });
+tripSchema.index({ isAutoSession: 1 });
 
 // Virtual for trip duration calculation
 tripSchema.virtual('duration').get(function () {

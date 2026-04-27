@@ -14,15 +14,10 @@ import { updateIncidentLocation } from '../../lib/api';
 import { VisionCameraComponent } from '../../components/VisionCameraComponent';
 import * as Haptics from 'expo-haptics';
 
-// Conditional import for expo-speech
-let Speech: any;
-try {
-  Speech = require('expo-speech');
-} catch (e) {
-  console.warn('expo-speech not found in native build');
-}
+import * as Speech from 'expo-speech';
 
 const { width } = Dimensions.get('window');
+
 
 // ActivityItem Component
 interface ActivityItemProps {
@@ -239,7 +234,8 @@ export default function DashboardScreen() {
     return () => {
       disconnectSocket();
     };
-  }, [addAlert, token]);
+  }, [addAlert, token, user]);
+
 
   const safetyScore = getSafetyScore();
   const yawningCount = getTodayAlertsCount('yawning');

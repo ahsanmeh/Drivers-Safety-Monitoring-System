@@ -2,14 +2,15 @@
 // Hardware: MQ-2 Smoke Sensor + Buzzer
 
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 
 // Wi-Fi Credentials (UPDATE THESE)
-const char* ssid = "YOUR_WIFI_SSID";
-const char* password = "YOUR_WIFI_PASSWORD";
+const char* ssid = "Ahsanmeh";
+const char* password = "12345678";
 
-// Backend Server (UPDATE THIS - Use your PC's local IP)
-const char* serverUrl = "http://192.168.1.100:5000/api/sensors/smoke";
+// Backend Server (Permanent Render URL)
+const char* serverUrl = "https://driver-safety-backend.onrender.com/api/sensors/smoke";
 
 // ESP32 will automatically send its MAC address - no manual configuration needed!
 
@@ -18,7 +19,7 @@ int buzzerPin = 26;
 int sensorPin = 32;
 
 // Threshold and Cooldown
-int smokeThreshold = 400;
+int smokeThreshold = 700;
 unsigned long lastAlertTime = 0;
 unsigned long alertCooldown = 10000; // 10 seconds
 
@@ -68,9 +69,12 @@ void loop() {
 
 void sendSmokeAlert(int value) {
   if (WiFi.status() == WL_CONNECTED) {
+    WiFiClientSecure client;
+    client.setInsecure(); // Required for HTTPS on Render without certificates
+    
     HTTPClient http;
     
-    http.begin(serverUrl);
+    http.begin(client, serverUrl);
     http.addHeader("Content-Type", "application/json");
     
     // Get ESP32's unique MAC address

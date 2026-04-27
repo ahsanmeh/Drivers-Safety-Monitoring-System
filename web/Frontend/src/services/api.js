@@ -20,6 +20,7 @@ const apiCall = async (endpoint, options = {}) => {
   const config = {
     headers: {
       'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
       ...(token && { Authorization: `Bearer ${token}` }),
     },
     ...options,
@@ -175,6 +176,7 @@ export const userAPI = {
       const response = await fetch(`${API_BASE_URL}/auth/upload-profile-image`, {
         method: 'POST',
         headers: {
+          'ngrok-skip-browser-warning': 'true',
           ...(token && { Authorization: `Bearer ${token}` }),
         },
         body: formData,
@@ -435,6 +437,7 @@ export const uploadAPI = {
       const response = await fetch(`${API_BASE_URL}/upload`, {
         method: 'POST',
         headers: {
+          'ngrok-skip-browser-warning': 'true',
           ...(token && { Authorization: `Bearer ${token}` }),
         },
         body: formData,

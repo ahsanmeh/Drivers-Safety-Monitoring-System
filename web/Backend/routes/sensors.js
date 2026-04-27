@@ -6,10 +6,11 @@ const User = require('../models/User');
 const Trip = require('../models/Trip');
 const { asyncHandler } = require('../utils/errorHandler');
 
-// Helper to generate incident number
+// Helper to generate incident number (with random suffix to prevent duplicates)
 const generateIncidentNumber = async () => {
     const count = await Incident.countDocuments();
-    return `INC${String(count + 1).padStart(6, '0')}`;
+    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+    return `INC${String(count + 1).padStart(6, '0')}-${randomSuffix}`;
 };
 
 // @desc    Receive Smoke Sensor Data

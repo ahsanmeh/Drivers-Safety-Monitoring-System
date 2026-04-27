@@ -10,13 +10,13 @@ const transporter = nodemailer.createTransport({
 });
 
 // Verify transporter configuration
-transporter.verify((error, success) => {
-  if (error) {
-    console.error('Email transporter error:', error);
-  } else {
-    console.log('✅ Email server is ready to send messages');
-  }
-});
+// transporter.verify((error, success) => {
+//   if (error) {
+//     console.error('Email transporter error:', error);
+//   } else {
+//     console.log('✅ Email server is ready to send messages');
+//   }
+// });
 
 /**
  * Send OTP email to user

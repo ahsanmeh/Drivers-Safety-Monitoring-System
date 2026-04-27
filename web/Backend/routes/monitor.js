@@ -16,10 +16,11 @@ const Trip = require('../models/Trip');
 const { asyncHandler } = require('../utils/errorHandler');
 const { protect } = require('../middlewares/auth');
 
-// Helper to generate incident number
+// Helper to generate incident number (with random suffix to prevent duplicates)
 const generateIncidentNumber = async () => {
     const count = await Incident.countDocuments();
-    return `INC${String(count + 1).padStart(6, '0')}`;
+    const randomSuffix = Math.floor(1000 + Math.random() * 9000); // 4-digit random number
+    return `INC${String(count + 1).padStart(6, '0')}-${randomSuffix}`;
 };
 
 // Cache for last incident created per driver to prevent spamming
@@ -56,14 +57,101 @@ router.post('/mobile', protect, asyncHandler(async (req, res) => {
     const { image } = req.body;
     const driverId = req.user._id;
 
-    // The provided snippet had a malformed line `const    if (!image_b64) {`.
-    // Assuming the intent was to add a check for `image_b64` if it were used,
-    // but the current code uses `image`. The existing `if (!image)` check handles this.
-    // I will only add the location logging as per the primary instruction.
-
     // DEBUG: Check location reception
-    if (req.body.location) {
-        logToDebug(`📍 Received Location from App: ${JSON.stringify(req.body.location)}`);
+    const location = req.body.location;
+    if (location && location.latitude && location.longitude) {
+        logToDebug(`📍 Received Location from App: ${JSON.stringify(location)}`);
+
+        const io = req.app.get('io');
+        const { latitude, longitude } = location;
+
+        // 1. Update driver's lastLocation in User model
+        await User.findByIdAndUpdate(driverId, {
+            lastLocation: { latitude, longitude, timestamp: new Date() }
+        });
+
+        // 2. Check if there's an active auto-session for this driver today
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+
+        let activeSession = await Trip.findOne({
+            assignedDriver: driverId,
+            status: 'in_progress',
+            isAutoSession: true,
+            createdAt: { $gte: todayStart }
+        });
+
+        // 3. If no active session, create one automatically
+        if (!activeSession) {
+            const tripCount = await Trip.countDocuments();
+            const tripNumber = `SES${String(tripCount + 1).padStart(6, '0')}`;
+
+            // Get address for start location
+            let startAddress = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+            try {
+                const geoAddress = await getAddressFromCoordinates(latitude, longitude);
+                if (geoAddress) startAddress = geoAddress;
+            } catch (e) { /* skip if geocoding fails */ }
+
+            // Find assigned vehicle
+            const assignedVehicle = await Vehicle.findOne({ assignedDriver: driverId, status: 'active' });
+
+            activeSession = await Trip.create({
+                tripNumber,
+                assignedDriver: driverId,
+                assignedVehicle: assignedVehicle ? assignedVehicle._id : undefined,
+                startLocation: {
+                    address: startAddress,
+                    coordinates: { latitude, longitude }
+                },
+                scheduledStartTime: new Date(),
+                actualStartTime: new Date(),
+                status: 'in_progress',
+                isAutoSession: true,
+                routeHistory: [{ latitude, longitude, timestamp: new Date() }],
+                currentPosition: { latitude, longitude, lastUpdated: new Date() }
+            });
+
+            logToDebug(`🚀 Auto-Session Created: ${tripNumber} for driver ${req.user.name}`);
+
+            // Notify web dashboard that a new session started
+            if (io) {
+                io.emit('session_started', {
+                    tripId: activeSession._id,
+                    tripNumber,
+                    driverId,
+                    driverName: req.user.name,
+                    startLocation: activeSession.startLocation
+                });
+            }
+        } else {
+            // 4. Update existing session's route history and current position
+            await Trip.findByIdAndUpdate(activeSession._id, {
+                $push: { routeHistory: { latitude, longitude, timestamp: new Date() } },
+                currentPosition: { latitude, longitude, lastUpdated: new Date() }
+            });
+        }
+
+        // 5. Relay live location to web dashboard via Socket.io
+        if (io) {
+            io.emit('driver_location_updated', {
+                driverId: driverId.toString(),
+                driverName: req.user.name,
+                tripId: activeSession._id.toString(),
+                latitude,
+                longitude,
+                timestamp: new Date()
+            });
+
+            // Also relay to anyone watching this specific trip
+            io.to(`trip_tracking_${activeSession._id}`).emit('trip_location_updated', {
+                driverId: driverId.toString(),
+                tripId: activeSession._id.toString(),
+                latitude,
+                longitude,
+                timestamp: new Date()
+            });
+        }
     } else {
         logToDebug(`⚠️ No Location received in request body.`);
     }
@@ -78,10 +166,11 @@ router.post('/mobile', protect, asyncHandler(async (req, res) => {
     try {
         logToDebug(`DEBUG: Sending image to Python service (size: ${image.length})`);
         // 1. Send to Python Service for detection
-        const pythonResponse = await axios.post('http://127.0.0.1:8000/detect-mobile', {
+        const pythonUrl = process.env.PYTHON_SERVER_URL || 'http://127.0.0.1:8000';
+        const pythonResponse = await axios.post(`${pythonUrl}/detect-mobile`, {
             image: image,
             driverId: driverId.toString()
-        }, { timeout: 4000 }); // Slightly longer timeout for combined processing
+        }, { timeout: 20000 }); // Increased timeout for cloud AI cold starts/processing
 
         logToDebug(`DEBUG: Python Response: ${JSON.stringify(pythonResponse.data)}`);
         const { detected, confidence, drowsiness } = pythonResponse.data;
@@ -131,9 +220,10 @@ router.post('/mobile', protect, asyncHandler(async (req, res) => {
                 logToDebug(`🚨 Processing ${det.type} for driver ${req.user.name}`);
 
                 // Find Active Trip or just fallback
-                const activeTrip = await Trip.findOne({ driver: driverId, status: 'in_progress' }).populate('vehicle');
-                const assignedVehicle = await Vehicle.findOne({ assignedDriver: driverId });
-                const vehicleId = activeTrip ? activeTrip.vehicle._id : (assignedVehicle ? assignedVehicle._id : null);
+                const activeTrip = await Trip.findOne({ assignedDriver: driverId, status: 'in_progress' }).populate('assignedVehicle');
+                const assignedVehicle = await Vehicle.findOne({ assignedDriver: driverId, status: 'active' });
+                const vehicleId = activeTrip ? activeTrip.assignedVehicle?._id : (assignedVehicle ? assignedVehicle._id : null);
+
 
                 const incidentNumber = await generateIncidentNumber();
                 let address = 'Detected by AI Monitor';
@@ -180,14 +270,18 @@ router.post('/mobile', protect, asyncHandler(async (req, res) => {
 
                     // NEW: Alert the driver directly for mobile app feedback
                     io.to(`driver_${req.user._id}`).emit('mobile_alert', alertPayload);
-                    logToDebug(`📱 Mobile alert sent to driver: ${req.user.name} (ID: ${req.user._id})`);
+                    logToDebug(`📱 Socket Alert: Sent to driver room driver_${req.user._id}`);
 
                     if (req.user.adminId) {
                         io.to(`admin_${req.user.adminId}`).emit('mobile_alert', alertPayload);
-                        logToDebug(`🖥️ Targeted mobile_alert sent to Admin: ${req.user.adminId}`);
+                        logToDebug(`🖥️ Socket Alert: Sent to targeted admin room admin_${req.user.adminId}`);
                     } else {
-                        logToDebug('⚠️ Driver has no adminId, alert not broadcasted to admins.');
+                        // Fallback: Broadcast to all admins if no specific admin is assigned
+                        io.emit('mobile_alert', alertPayload);
+                        logToDebug('📢 Socket Alert: No adminId found, broadcasting to all connected clients');
                     }
+                } else {
+                    logToDebug('❌ Socket Error: io instance not found in req.app');
                 }
             } else {
                 results.push({ type: det.type, status: 'cooldown_active' });

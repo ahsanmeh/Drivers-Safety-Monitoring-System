@@ -63,8 +63,9 @@ const compareFaces = async (referenceImagePath, liveImageBase64, driverId, drive
   const refBuffer = fs.readFileSync(referenceImagePath);
   const referenceB64 = refBuffer.toString('base64');
 
+  const pythonUrl = process.env.PYTHON_SERVER_URL || 'http://127.0.0.1:8000';
   const response = await axios.post(
-    'http://127.0.0.1:8000/compare-faces',
+    `${pythonUrl}/compare-faces`,
     {
       reference_image: referenceB64,
       live_image: liveImageBase64,
@@ -144,7 +145,8 @@ const register = asyncHandler(async (req, res) => {
     const imageBuffer = fs.readFileSync(req.file.path);
     const imageBase64 = imageBuffer.toString('base64');
 
-    await axios.post('http://127.0.0.1:8000/detect-face', {
+    const pythonUrl = process.env.PYTHON_SERVER_URL || 'http://127.0.0.1:8000';
+    await axios.post(`${pythonUrl}/detect-face`, {
       image: imageBase64
     });
   } catch (error) {

@@ -5,6 +5,8 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const connectDB = require('./utils/database');
 const { errorHandler } = require('./utils/errorHandler');
+const Trip = require('./models/Trip');
+const User = require('./models/User');
 
 // Load environment variables
 dotenv.config();
@@ -55,13 +57,57 @@ io.on('connection', (socket) => {
     });
   });
 
-  socket.on('disconnect', () => {
+  socket.on('disconnect', async () => {
     console.log('Client disconnected:', socket.id);
 
     if (socket.driverId) {
       console.log(`📱 Driver ${socket.driverId} disconnected`);
       onlineDrivers.delete(socket.driverId);
       io.emit('online_drivers_update', Array.from(onlineDrivers));
+
+      // Auto-end the driver's active session trip
+      try {
+        const activeSession = await Trip.findOne({
+          assignedDriver: socket.driverId,
+          status: 'in_progress',
+          isAutoSession: true
+        });
+
+        if (activeSession) {
+          const endTime = new Date();
+          const durationMinutes = Math.round(
+            (endTime - activeSession.actualStartTime) / (1000 * 60)
+          );
+
+          // Get last known location from User model
+          const driver = await User.findById(socket.driverId);
+          const lastLoc = driver?.lastLocation;
+
+          await Trip.findByIdAndUpdate(activeSession._id, {
+            status: 'completed',
+            actualEndTime: endTime,
+            actualDuration: durationMinutes,
+            ...(lastLoc && {
+              endLocation: {
+                address: `${lastLoc.latitude?.toFixed(4)}, ${lastLoc.longitude?.toFixed(4)}`,
+                coordinates: { latitude: lastLoc.latitude, longitude: lastLoc.longitude }
+              }
+            })
+          });
+
+          console.log(`✅ Auto-session ${activeSession.tripNumber} completed for driver ${socket.driverId}`);
+
+          // Notify web dashboard session ended
+          io.emit('session_ended', {
+            tripId: activeSession._id,
+            tripNumber: activeSession.tripNumber,
+            driverId: socket.driverId,
+            duration: durationMinutes
+          });
+        }
+      } catch (err) {
+        console.error('Error ending auto-session:', err.message);
+      }
     }
 
     if (socket.adminId) {
@@ -132,6 +178,41 @@ io.on('connection', (socket) => {
     console.log(`🛑 Driver ${driverId} stopped streaming`);
     socket.leave(`stream_${driverId}`);
     io.to(`stream_view_${driverId}`).emit('stream_ended', { driverId });
+  });
+
+  // GPS Tracking Events
+  socket.on('join_trip_tracking', (tripId) => {
+    console.log(`🗺️ Admin joined tracking for trip ${tripId}`);
+    socket.join(`trip_tracking_${tripId}`);
+  });
+
+  socket.on('leave_trip_tracking', (tripId) => {
+    console.log(`🗺️ Admin left tracking for trip ${tripId}`);
+    socket.leave(`trip_tracking_${tripId}`);
+  });
+
+  socket.on('location_update', (data) => {
+    const { driverId, tripId, latitude, longitude } = data;
+    // console.log(`📍 Location update from driver ${driverId}: ${latitude}, ${longitude}`);
+
+    // Relay to any admin watching this specific trip
+    if (tripId) {
+      io.to(`trip_tracking_${tripId}`).emit('trip_location_updated', {
+        driverId,
+        tripId,
+        latitude,
+        longitude,
+        timestamp: new Date()
+      });
+    }
+
+    // Relay to admins watching the general fleet map
+    io.emit('driver_location_updated', {
+      driverId,
+      latitude,
+      longitude,
+      timestamp: new Date()
+    });
   });
 });
 

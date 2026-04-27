@@ -1,429 +1,352 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import DashboardLayout from '../components/DashboardLayout';
-import CreateTripModal from '../components/CreateTripModal';
-import EditTripModal from '../components/EditTripModal';
-import TripDetailModal from '../components/TripDetailModal';
+import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import { io } from 'socket.io-client';
 import {
-  FiUsers,
-  FiUser,
-  FiClock,
-  FiAlertTriangle,
-  FiTruck,
-  FiDollarSign,
-  FiFileText,
-  FiCalendar,
-  FiCheckCircle,
-  FiPlus,
-  FiEye,
-  FiEdit,
-  FiTrash2,
-  FiPlay,
-  FiSquare,
-  FiVideo
+  FiMapPin, FiClock, FiUser, FiTruck, FiCheckCircle,
+  FiActivity, FiCalendar, FiNavigation, FiList
 } from 'react-icons/fi';
-import { tripAPI } from '../services/api';
-import { toast } from 'react-hot-toast';
+import { tripAPI, userAPI } from '../services/api';
+
+// Fix Leaflet default marker icons
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
+
+// Create a custom driver icon
+const createDriverIcon = (isOnline) => L.divIcon({
+  className: '',
+  html: `<div style="
+    background: ${isOnline ? '#10b981' : '#6b7280'};
+    border: 3px solid white;
+    border-radius: 50%;
+    width: 36px; height: 36px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    font-size: 18px;
+  ">🚗</div>`,
+  iconSize: [36, 36],
+  iconAnchor: [18, 18],
+});
+
+const BACKEND_URL = process.env.REACT_APP_API_URL
+  ? process.env.REACT_APP_API_URL.replace('/api', '')
+  : `http://${window.location.hostname}:5000`;
+
+const navigationItems = [
+  { name: 'Trips', icon: FiClock, path: '/dashboard/trips' },
+  { name: 'Incidents', icon: FiActivity, path: '/dashboard/incidents' },
+  { name: 'Vehicles', icon: FiTruck, path: '/dashboard/vehicles' },
+  { name: 'Users', icon: FiUser, path: '/dashboard/users' },
+  { name: 'Reports', icon: FiList, path: '/dashboard/reports' },
+  { name: 'Live Monitor', icon: FiNavigation, path: '/dashboard/live' },
+  { name: 'Profile', icon: FiUser, path: '/dashboard/profile' }
+];
 
 const TripsPage = () => {
   const [user, setUser] = useState(null);
-  const [trips, setTrips] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [showDetailModal, setShowDetailModal] = useState(false);
-  const [selectedTrip, setSelectedTrip] = useState(null);
+  const [activeTab, setActiveTab] = useState('live'); // 'live' | 'history'
+  const [driverLocations, setDriverLocations] = useState({}); // { driverId: { lat, lng, name, tripId } }
+  const [onlineDriverIds, setOnlineDriverIds] = useState([]);
+  const [allDrivers, setAllDrivers] = useState([]);
+  const [sessionHistory, setSessionHistory] = useState([]);
+  const [selectedDriverId, setSelectedDriverId] = useState(null);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const socketRef = useRef(null);
+  const mapRef = useRef(null);
 
-  const navigationItems = [
-    { name: 'Trips', icon: FiClock, path: '/dashboard/trips' },
-    { name: 'Incidents', icon: FiAlertTriangle, path: '/dashboard/incidents' },
-    { name: 'Vehicles', icon: FiTruck, path: '/dashboard/vehicles' },
-    { name: 'Users', icon: FiUsers, path: '/dashboard/users' },
-    { name: 'Reports', icon: FiDollarSign, path: '/dashboard/reports' },
-    { name: 'Live Monitor', icon: FiVideo, path: '/dashboard/live' },
-    { name: 'Profile', icon: FiUser, path: '/dashboard/profile' }
-  ];
-
+  // Load user profile
   useEffect(() => {
-    const userData = localStorage.getItem('user');
-    if (userData) {
-      setUser(JSON.parse(userData));
-    }
-    fetchTrips();
+    const stored = localStorage.getItem('user');
+    if (stored) setUser(JSON.parse(stored));
   }, []);
 
-  const fetchTrips = async () => {
+  // Load all drivers for the sidebar
+  useEffect(() => {
+    userAPI.getAllDrivers().then(response => {
+      setAllDrivers(response?.data || []);
+    }).catch(() => {});
+  }, []);
+
+  // Load session history
+  const fetchHistory = async () => {
+    setLoadingHistory(true);
     try {
-      setLoading(true);
-      const response = await tripAPI.getAllTrips();
+      const response = await tripAPI.getAllTrips({ limit: 50, sort: '-createdAt' });
+      setSessionHistory(response?.data || []);
+    } catch (e) {}
+    setLoadingHistory(false);
+  };
 
-      if (response.success) {
-        setTrips(response.data);
-      }
-    } catch (error) {
-      console.error('Error fetching trips:', error);
-      toast.error('Failed to load trips');
-      // Mock data for development
-      setTrips([
-        {
-          _id: '1',
-          tripNumber: 'TRP000001',
-          assignedDriver: { name: 'John Driver', email: 'john@example.com' },
-          assignedVehicle: { make: 'Toyota', model: 'Camry', licensePlate: 'ABC-123' },
-          startLocation: { address: '123 Start St, Start City' },
-          endLocation: { address: '456 End St, End City' },
-          scheduledStartTime: '2024-02-01T08:00:00.000Z',
-          scheduledEndTime: '2024-02-01T12:00:00.000Z',
-          status: 'scheduled',
-          distance: 25.5,
-          estimatedDuration: 240
-        },
-        {
-          _id: '2',
-          tripNumber: 'TRP000002',
-          assignedDriver: { name: 'Jane Driver', email: 'jane@example.com' },
-          assignedVehicle: { make: 'Honda', model: 'Civic', licensePlate: 'XYZ-789' },
-          startLocation: { address: '789 Origin St, Origin City' },
-          endLocation: { address: '321 Destination St, Destination City' },
-          scheduledStartTime: '2024-02-01T14:00:00.000Z',
-          scheduledEndTime: '2024-02-01T18:00:00.000Z',
-          status: 'in_progress',
-          distance: 45.2,
-          estimatedDuration: 180
-        }
-      ]);
-    } finally {
-      setLoading(false);
+
+  useEffect(() => {
+    fetchHistory();
+  }, []);
+
+  // Socket.io — real-time location + online status
+  useEffect(() => {
+    const socket = io(BACKEND_URL, { transports: ['websocket'] });
+    socketRef.current = socket;
+
+    socket.on('connect', () => {
+      socket.emit('get_online_drivers');
+    });
+
+    // Receive updated online drivers list
+    socket.on('online_drivers_update', (ids) => {
+      setOnlineDriverIds(ids);
+    });
+
+    // Receive live location updates from any driver
+    socket.on('driver_location_updated', ({ driverId, driverName, tripId, latitude, longitude }) => {
+      setDriverLocations(prev => ({
+        ...prev,
+        [driverId]: { lat: latitude, lng: longitude, name: driverName, tripId }
+      }));
+    });
+
+    // New auto-session started — refresh history
+    socket.on('session_started', () => {
+      fetchHistory();
+    });
+
+    // Session ended — refresh history
+    socket.on('session_ended', () => {
+      fetchHistory();
+    });
+
+    return () => socket.disconnect();
+  }, []);
+
+  // When a driver is selected, pan the map to their location
+  useEffect(() => {
+    if (selectedDriverId && driverLocations[selectedDriverId] && mapRef.current) {
+      const { lat, lng } = driverLocations[selectedDriverId];
+      mapRef.current.setView([lat, lng], 15);
     }
+  }, [selectedDriverId, driverLocations]);
+
+  const formatDuration = (minutes) => {
+    if (!minutes) return '—';
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return h > 0 ? `${h}h ${m}m` : `${m}m`;
   };
 
-  const handleTripCreated = (newTrip) => {
-    setTrips(prev => [newTrip, ...prev]);
-    toast.success('Trip created successfully!');
+  const formatTime = (date) => {
+    if (!date) return '—';
+    return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  const handleViewDetails = (trip) => {
-    setSelectedTrip(trip);
-    setShowDetailModal(true);
+  const formatDate = (date) => {
+    if (!date) return '—';
+    return new Date(date).toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' });
   };
 
-  const handleEditTrip = (trip) => {
-    setSelectedTrip(trip);
-    setShowEditModal(true);
-  };
+  // All driver markers currently on the map (only those who sent location)
+  const driversOnMap = Object.entries(driverLocations);
 
-  const handleTripUpdated = (updatedTrip) => {
-    setTrips(prev => prev.map(trip =>
-      trip._id === updatedTrip._id ? updatedTrip : trip
-    ));
-    toast.success('Trip updated successfully!');
-  };
+  // Default map center (Islamabad, Pakistan — adjust to your region)
+  const mapCenter = driversOnMap.length > 0
+    ? [driversOnMap[0][1].lat, driversOnMap[0][1].lng]
+    : [33.6844, 73.0479];
 
-  const handleStartTrip = async (tripId) => {
-    try {
-      const response = await tripAPI.updateTripStatus(tripId, {
-        status: 'in_progress',
-        actualStartTime: new Date().toISOString()
-      });
-      if (response.success) {
-        toast.success('Trip started successfully!');
-        fetchTrips(); // Refresh the trips list
-      } else {
-        toast.error(response.message || 'Failed to start trip');
-      }
-    } catch (error) {
-      console.error('Error starting trip:', error);
-      toast.error('Failed to start trip');
-    }
-  };
-
-  const handleCompleteTrip = async (tripId) => {
-    try {
-      const response = await tripAPI.updateTripStatus(tripId, {
-        status: 'completed',
-        actualEndTime: new Date().toISOString()
-      });
-      if (response.success) {
-        toast.success('Trip completed successfully!');
-        fetchTrips(); // Refresh the trips list
-      } else {
-        toast.error(response.message || 'Failed to complete trip');
-      }
-    } catch (error) {
-      console.error('Error completing trip:', error);
-      toast.error('Failed to complete trip');
-    }
-  };
-
-  const handleDeleteTrip = async (tripId) => {
-    if (window.confirm('Are you sure you want to delete this trip?')) {
-      try {
-        const response = await tripAPI.deleteTrip(tripId);
-        if (response.success) {
-          toast.success('Trip deleted successfully!');
-          setTrips(prev => prev.filter(trip => trip._id !== tripId));
-        } else {
-          toast.error(response.message || 'Failed to delete trip');
-        }
-      } catch (error) {
-        console.error('Error deleting trip:', error);
-        toast.error('Failed to delete trip');
-      }
-    }
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'scheduled': return 'bg-yellow-100 text-yellow-800';
-      case 'in_progress': return 'bg-blue-100 text-blue-800';
-      case 'completed': return 'bg-green-100 text-green-800';
-      case 'cancelled': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-
-  if (!user) {
-    return <div>Loading...</div>;
-  }
+  if (!user) return <div>Loading...</div>;
 
   return (
-    <DashboardLayout
-      user={user}
-      activePage="Trips"
-      navigationItems={navigationItems}
-    >
+    <DashboardLayout user={user} activePage="Trips" navigationItems={navigationItems}>
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="mb-8"
-        >
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-800 mb-2">Trip Management</h1>
-              <p className="text-gray-600">Monitor and manage all trip assignments</p>
-            </div>
-            {user?.role === 'admin' && (
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setShowCreateModal(true)}
-                className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors duration-300 shadow-lg flex items-center space-x-2"
-              >
-                <FiPlus className="w-5 h-5" />
-                <span>Create Trip</span>
-              </motion.button>
-            )}
-          </div>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
+          <h1 className="text-3xl font-bold text-gray-800 mb-1">Driver Sessions</h1>
+          <p className="text-gray-500">Live locations update automatically when drivers are active</p>
         </motion.div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        {/* Stats Row */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           {[
-            { title: 'Total Trips', value: trips.length, icon: FiClock, color: 'bg-blue-500' },
-            { title: 'Scheduled', value: trips.filter(t => t.status === 'scheduled').length, icon: FiCalendar, color: 'bg-yellow-500' },
-            { title: 'In Progress', value: trips.filter(t => t.status === 'in_progress').length, icon: FiTruck, color: 'bg-blue-500' },
-            { title: 'Completed', value: trips.filter(t => t.status === 'completed').length, icon: FiCheckCircle, color: 'bg-green-500' }
-          ].map((stat, index) => (
-            <motion.div
-              key={stat.title}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: index * 0.1 }}
-              className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-300"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-600 text-sm font-medium mb-1">{stat.title}</p>
-                  <p className="text-3xl font-bold text-gray-800">{stat.value}</p>
-                </div>
-                <div className={`w-16 h-16 ${stat.color} rounded-2xl flex items-center justify-center shadow-lg`}>
-                  <stat.icon className="w-8 h-8 text-white" />
-                </div>
+            { label: 'Online Now', value: onlineDriverIds.length, icon: FiActivity, color: 'bg-green-500' },
+            { label: 'On Map', value: driversOnMap.length, icon: FiMapPin, color: 'bg-blue-500' },
+            { label: 'Total Sessions', value: sessionHistory.length, icon: FiList, color: 'bg-purple-500' },
+            { label: 'Completed Today', value: sessionHistory.filter(t => t.status === 'completed' && new Date(t.createdAt) > new Date(new Date().setHours(0,0,0,0))).length, icon: FiCheckCircle, color: 'bg-indigo-500' },
+          ].map((stat, i) => (
+            <motion.div key={stat.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}
+              className="bg-white rounded-xl p-4 shadow flex items-center space-x-3">
+              <div className={`${stat.color} text-white p-2 rounded-lg`}>
+                <stat.icon className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-gray-800">{stat.value}</div>
+                <div className="text-xs text-gray-500">{stat.label}</div>
               </div>
             </motion.div>
           ))}
         </div>
 
-        {/* Trips List */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.4 }}
-          className="bg-white rounded-2xl shadow-xl overflow-hidden"
-        >
-          <div className="p-6 border-b border-gray-200">
-            <div className="flex justify-between items-center">
-              <h2 className="text-2xl font-semibold text-gray-800">Recent Trips</h2>
-              <div className="flex space-x-4">
-                <input
-                  type="text"
-                  placeholder="Search trips..."
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-300">
-                  Filter
-                </button>
-              </div>
-            </div>
-          </div>
+        {/* Tabs */}
+        <div className="flex space-x-2 mb-4">
+          <button onClick={() => setActiveTab('live')}
+            className={`px-5 py-2 rounded-lg font-medium transition-all ${activeTab === 'live' ? 'bg-blue-600 text-white shadow' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+            🗺️ Live Fleet Map
+          </button>
+          <button onClick={() => setActiveTab('history')}
+            className={`px-5 py-2 rounded-lg font-medium transition-all ${activeTab === 'history' ? 'bg-blue-600 text-white shadow' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+            📋 Session History
+          </button>
+        </div>
 
-          <div className="p-6">
-            {loading ? (
-              <div className="flex justify-center items-center py-12">
-                <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+        {/* ===== LIVE MAP TAB ===== */}
+        {activeTab === 'live' && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+            {/* Driver List Sidebar */}
+            <div className="bg-white rounded-2xl shadow p-4 lg:col-span-1 h-96 lg:h-auto overflow-y-auto">
+              <h2 className="font-semibold text-gray-700 mb-3 flex items-center space-x-2">
+                <FiUser className="w-4 h-4" /> <span>Drivers</span>
+              </h2>
+              {allDrivers.filter(d => onlineDriverIds.includes(d._id)).length === 0 && (
+                <p className="text-sm text-gray-400 py-4 text-center italic">No drivers currently online</p>
+              )}
+
+              {allDrivers
+                .filter(driver => onlineDriverIds.includes(driver._id))
+                .sort((a, b) => {
+                  const aOnline = onlineDriverIds.includes(a._id);
+                  const bOnline = onlineDriverIds.includes(b._id);
+                  return bOnline - aOnline;
+                })
+                .map(driver => {
+
+                const isOnline = onlineDriverIds.includes(driver._id);
+                const hasLocation = !!driverLocations[driver._id];
+                const isSelected = selectedDriverId === driver._id;
+                return (
+                  <button key={driver._id}
+                    onClick={() => { setSelectedDriverId(driver._id); setActiveTab('live'); }}
+                    className={`w-full text-left p-3 rounded-xl mb-2 transition-all border-2 ${isSelected ? 'border-blue-500 bg-blue-50' : 'border-transparent hover:bg-gray-50'}`}>
+                    <div className="flex items-center space-x-2">
+                      <div className={`w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-green-500' : 'bg-gray-300'}`} />
+                      <span className="font-medium text-sm text-gray-800">{driver.name}</span>
+                    </div>
+                    <div className="text-xs text-gray-400 mt-0.5 pl-4">
+                      {isOnline ? (hasLocation ? '📍 Location active' : '🟡 Online, awaiting GPS') : '⚫ Offline'}
+                    </div>
+                  </button>
+                );
+              })}
+
+            </div>
+
+            {/* Map */}
+            <div className="bg-white rounded-2xl shadow overflow-hidden lg:col-span-3 relative z-0" style={{ height: '520px' }}>
+              {driversOnMap.length === 0 && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-50 z-10 rounded-2xl">
+                  <span className="text-5xl mb-3">🗺️</span>
+                  <p className="text-gray-500 font-medium">Waiting for drivers to go online...</p>
+                  <p className="text-gray-400 text-sm mt-1">Driver locations will appear here automatically</p>
+                </div>
+              )}
+              <MapContainer
+                center={mapCenter}
+                zoom={13}
+                style={{ height: '100%', width: '100%' }}
+                whenCreated={map => { mapRef.current = map; }}
+              >
+                <TileLayer
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  attribution='&copy; OpenStreetMap contributors'
+                />
+                {driversOnMap.map(([driverId, loc]) => (
+                  <Marker
+                    key={driverId}
+                    position={[loc.lat, loc.lng]}
+                    icon={createDriverIcon(onlineDriverIds.includes(driverId))}
+                  >
+                    <Popup>
+                      <div className="text-sm">
+                        <strong>{loc.name || 'Driver'}</strong><br />
+                        📍 {loc.lat.toFixed(5)}, {loc.lng.toFixed(5)}<br />
+                        <span className={onlineDriverIds.includes(driverId) ? 'text-green-600' : 'text-gray-500'}>
+                          {onlineDriverIds.includes(driverId) ? '🟢 Online' : '⚫ Offline'}
+                        </span>
+                      </div>
+                    </Popup>
+                  </Marker>
+                ))}
+              </MapContainer>
+            </div>
+          </motion.div>
+        )}
+
+        {/* ===== HISTORY TAB ===== */}
+        {activeTab === 'history' && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white rounded-2xl shadow overflow-hidden">
+            <div className="p-5 border-b border-gray-100">
+              <h2 className="text-lg font-semibold text-gray-800">All Sessions</h2>
+              <p className="text-sm text-gray-500">Auto-created when drivers go online. Completed when they log out.</p>
+            </div>
+            {loadingHistory ? (
+              <div className="p-8 text-center text-gray-400">Loading sessions...</div>
+            ) : sessionHistory.length === 0 ? (
+              <div className="p-8 text-center">
+                <span className="text-5xl">📋</span>
+                <p className="text-gray-500 mt-3">No sessions yet. Sessions are created automatically when a driver goes online.</p>
               </div>
             ) : (
-              <div className="space-y-4">
-                {trips.map((trip, index) => (
-                  <motion.div
-                    key={trip._id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3, delay: index * 0.1 }}
-                    className="bg-gray-50 rounded-xl p-6 hover:shadow-lg transition-all duration-300"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-4 mb-4">
-                          <h3 className="text-xl font-semibold text-gray-800">
-                            {trip.tripNumber}
-                          </h3>
-                          <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(trip.status)}`}>
-                            {trip.status}
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-100">
+                    <tr>
+                      {['Session ID', 'Driver', 'Date', 'Start Time', 'End Time', 'Duration', 'Status', 'Type'].map(h => (
+                        <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {sessionHistory.map((trip, i) => (
+                      <motion.tr key={trip._id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03 }}
+                        className="hover:bg-gray-50 transition-colors">
+                        <td className="px-4 py-3 font-mono text-xs text-blue-600 font-semibold">{trip.tripNumber}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center space-x-2">
+                            <FiUser className="w-3 h-3 text-gray-400" />
+                            <span className="text-sm text-gray-700">{trip.assignedDriver?.name || '—'}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600">{formatDate(trip.createdAt)}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600">{formatTime(trip.actualStartTime || trip.scheduledStartTime)}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600">{formatTime(trip.actualEndTime)}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600">{formatDuration(trip.actualDuration)}</td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                            trip.status === 'in_progress' ? 'bg-blue-100 text-blue-700' :
+                            trip.status === 'completed' ? 'bg-green-100 text-green-700' :
+                            trip.status === 'scheduled' ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-gray-100 text-gray-700'
+                          }`}>
+                            {trip.status === 'in_progress' ? '🟢 Active' :
+                             trip.status === 'completed' ? '✅ Done' :
+                             trip.status === 'scheduled' ? '📅 Scheduled' : trip.status}
                           </span>
-                        </div>
-
-                        <div className="grid md:grid-cols-2 gap-6">
-                          <div>
-                            <p className="text-gray-600 text-sm mb-2">Driver</p>
-                            <p className="font-medium text-gray-800">{trip.assignedDriver?.name}</p>
-                            <p className="text-sm text-gray-500">{trip.assignedDriver?.email}</p>
-                          </div>
-                          <div>
-                            <p className="text-gray-600 text-sm mb-2">Vehicle</p>
-                            <p className="font-medium text-gray-800">
-                              {trip.assignedVehicle?.make} {trip.assignedVehicle?.model}
-                            </p>
-                            <p className="text-sm text-gray-500">{trip.assignedVehicle?.licensePlate}</p>
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-gray-600 text-sm mb-2">From</p>
-                            <p
-                              className="font-medium text-gray-800 truncate cursor-help"
-                              title={trip.startLocation?.address || 'Unknown Start'}
-                              style={{
-                                maxWidth: '200px',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap'
-                              }}
-                            >
-                              {(trip.startLocation?.address || 'Unknown Start').split(',')[0]}
-                            </p>
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-gray-600 text-sm mb-2">To</p>
-                            <p
-                              className="font-medium text-gray-800 truncate cursor-help"
-                              title={trip.endLocation?.address || 'Unknown End'}
-                              style={{
-                                maxWidth: '200px',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap'
-                              }}
-                            >
-                              {(trip.endLocation?.address || 'Unknown End').split(',')[0]}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="text-right ml-6">
-                        <p className="text-sm text-gray-600 mb-1">Distance</p>
-                        <p className="text-lg font-semibold text-gray-800">{trip.distance} km</p>
-                        <p className="text-sm text-gray-600 mt-2">Duration</p>
-                        <p className="text-sm font-medium text-gray-800">{Math.floor(trip.estimatedDuration / 60)}h {trip.estimatedDuration % 60}m</p>
-
-                        <div className="flex space-x-2 mt-4">
-                          <button
-                            onClick={() => handleViewDetails(trip)}
-                            className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors duration-300 flex items-center space-x-1"
-                          >
-                            <FiEye className="w-3 h-3" />
-                            <span>View</span>
-                          </button>
-
-                          {trip.status === 'scheduled' && (
-                            <button
-                              onClick={() => handleStartTrip(trip._id)}
-                              className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors duration-300 flex items-center space-x-1"
-                            >
-                              <FiPlay className="w-3 h-3" />
-                              <span>Start</span>
-                            </button>
-                          )}
-
-                          {trip.status === 'in_progress' && (
-                            <button
-                              onClick={() => handleCompleteTrip(trip._id)}
-                              className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors duration-300 flex items-center space-x-1"
-                            >
-                              <FiSquare className="w-3 h-3" />
-                              <span>Complete</span>
-                            </button>
-                          )}
-
-                          <button
-                            onClick={() => handleEditTrip(trip)}
-                            className="px-3 py-1 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors duration-300 flex items-center space-x-1"
-                          >
-                            <FiEdit className="w-3 h-3" />
-                            <span>Edit</span>
-                          </button>
-
-                          <button
-                            onClick={() => handleDeleteTrip(trip._id)}
-                            className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors duration-300 flex items-center space-x-1"
-                          >
-                            <FiTrash2 className="w-3 h-3" />
-                            <span>Delete</span>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </motion.div>
-                ))}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-1 rounded-full text-xs ${trip.isAutoSession ? 'bg-purple-100 text-purple-600' : 'bg-gray-100 text-gray-500'}`}>
+                            {trip.isAutoSession ? '🤖 Auto' : '👤 Manual'}
+                          </span>
+                        </td>
+                      </motion.tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
-          </div>
-        </motion.div>
-
-        {/* Create Trip Modal */}
-        <CreateTripModal
-          isOpen={showCreateModal}
-          onClose={() => setShowCreateModal(false)}
-          onTripCreated={handleTripCreated}
-        />
-
-        {/* Edit Trip Modal */}
-        <EditTripModal
-          isOpen={showEditModal}
-          onClose={() => setShowEditModal(false)}
-          trip={selectedTrip}
-          onTripUpdated={handleTripUpdated}
-        />
-
-        {/* Trip Detail Modal */}
-        <TripDetailModal
-          isOpen={showDetailModal}
-          onClose={() => setShowDetailModal(false)}
-          trip={selectedTrip}
-        />
+          </motion.div>
+        )}
       </div>
     </DashboardLayout>
   );
