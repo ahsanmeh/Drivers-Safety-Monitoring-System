@@ -168,7 +168,8 @@ const RegisterPage = ({ updateUser }) => {
       if (formData.gender) formDataToSend.append('gender', formData.gender);
       if (formData.profileImage) formDataToSend.append('profileImage', formData.profileImage);
 
-      const response = await fetch('http://localhost:5000/api/auth/register', {
+      const API_URL = process.env.REACT_APP_API_URL || `http://${window.location.hostname}:5000/api`;
+      const response = await fetch(`${API_URL}/auth/register`, {
         method: 'POST',
         // Content-Type header is not set manually for FormData, browser sets it with boundary
         body: formDataToSend,

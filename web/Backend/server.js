@@ -1,18 +1,12 @@
+require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
-const dotenv = require('dotenv');
 const connectDB = require('./utils/database');
 const { errorHandler } = require('./utils/errorHandler');
 const Trip = require('./models/Trip');
 const User = require('./models/User');
-
-// Load environment variables
-dotenv.config();
-
-console.log("Loaded MONGODB_URI:", process.env.MONGODB_URI);
-
 
 // Connect to database
 connectDB();

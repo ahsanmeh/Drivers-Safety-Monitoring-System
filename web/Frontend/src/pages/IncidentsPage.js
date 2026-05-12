@@ -32,6 +32,7 @@ const IncidentsPage = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedIncident, setSelectedIncident] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const navigationItems = [
     { name: 'Trips', icon: FiClock, path: '/dashboard/trips' },
@@ -200,6 +201,24 @@ const IncidentsPage = () => {
     }
   };
 
+  // Filter incidents based on search query
+  const filteredIncidents = incidents.filter(incident => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      (incident.incidentNumber || '').toLowerCase().includes(q) ||
+      (incident.driver?.name || '').toLowerCase().includes(q) ||
+      (incident.incidentType || '').toLowerCase().includes(q) ||
+      (incident.severity || '').toLowerCase().includes(q) ||
+      (incident.status || '').toLowerCase().includes(q) ||
+      (incident.vehicle?.make || '').toLowerCase().includes(q) ||
+      (incident.vehicle?.model || '').toLowerCase().includes(q) ||
+      (incident.vehicle?.licensePlate || '').toLowerCase().includes(q) ||
+      (incident.location?.address || '').toLowerCase().includes(q) ||
+      (incident.description || '').toLowerCase().includes(q)
+    );
+  });
+
   return (
     <DashboardLayout
       user={user}
@@ -263,6 +282,8 @@ const IncidentsPage = () => {
                 <input
                   type="text"
                   placeholder="Search incidents..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
                   className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
                 <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-300">
@@ -279,7 +300,14 @@ const IncidentsPage = () => {
               </div>
             ) : (
               <div className="space-y-4">
-                {incidents.map((incident, index) => (
+                {filteredIncidents.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+                    <FiSearch className="w-12 h-12 mb-3 opacity-30" />
+                    <p className="text-lg font-medium">No incidents found</p>
+                    <p className="text-sm">Try searching by driver name, type, severity, or incident number</p>
+                  </div>
+                ) : (
+                  filteredIncidents.map((incident, index) => (
                   <motion.div
                     key={incident._id}
                     initial={{ opacity: 0, y: 20 }}
@@ -373,7 +401,8 @@ const IncidentsPage = () => {
                       </div>
                     </div>
                   </motion.div>
-                ))}
+                  ))
+                )}
               </div>
             )}
           </div>

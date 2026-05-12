@@ -79,6 +79,8 @@ export default function DashboardScreen() {
     try {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       if (Speech) {
+        // Stop any currently playing audio before starting a new one to prevent glitching
+        Speech.stop();
         Speech.speak(message, {
           pitch: 1.0,
           rate: 0.9,

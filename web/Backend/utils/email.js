@@ -4,19 +4,19 @@ const nodemailer = require('nodemailer');
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: 'kashif.syslab@gmail.com',
-    pass: 'gofb rlgn xyau ehac' // Gmail App Password
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
   }
 });
 
 // Verify transporter configuration
-// transporter.verify((error, success) => {
-//   if (error) {
-//     console.error('Email transporter error:', error);
-//   } else {
-//     console.log('✅ Email server is ready to send messages');
-//   }
-// });
+transporter.verify((error, success) => {
+  if (error) {
+    console.error('❌ Email transporter error:', error);
+  } else {
+    console.log('✅ Email server is ready to send messages');
+  }
+});
 
 /**
  * Send OTP email to user
@@ -27,7 +27,7 @@ const transporter = nodemailer.createTransport({
  */
 const sendOTPEmail = async (email, otpCode, userName = 'User') => {
   const mailOptions = {
-    from: '"Driver Safety Monitoring System" <kashif.syslab@gmail.com>',
+    from: `"Driver Safety Monitoring System" <${process.env.EMAIL_USER}>`,
     to: email,
     subject: 'Your Two-Factor Authentication Code',
     html: `
@@ -70,7 +70,7 @@ const sendPasswordResetEmail = async (email, resetToken, userName = 'User', days
   const resetUrl = `${frontendUrl}/reset-password?token=${resetToken}`;
 
   const mailOptions = {
-    from: '"Driver Safety Monitoring System" <kashif.syslab@gmail.com>',
+    from: `"Driver Safety Monitoring System" <${process.env.EMAIL_USER}>`,
     to: email,
     subject: daysExpired > 0
       ? `Your Password Has Expired - Reset Required`
@@ -124,11 +124,12 @@ const sendPasswordResetEmail = async (email, resetToken, userName = 'User', days
   };
 
   try {
+    console.log(`Attempting to send password reset email to: ${email}`);
     const info = await transporter.sendMail(mailOptions);
-    console.log('Password reset email sent:', info.messageId);
+    console.log('✅ Password reset email sent successfully:', info.messageId);
     return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error('Error sending password reset email:', error);
+    console.error('❌ Error sending password reset email:', error);
     throw new Error('Failed to send password reset email');
   }
 };

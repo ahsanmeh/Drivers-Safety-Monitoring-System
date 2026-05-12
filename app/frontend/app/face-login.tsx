@@ -204,6 +204,7 @@ export default function FaceLoginScreen() {
 
       // 🔊 Voice welcome message
       const driverName = result.user?.name || 'Driver';
+      Speech.stop();
       Speech.speak(`Welcome back, ${driverName}. Drive safely!`, {
         language: 'en-US',
         pitch: 1.0,
@@ -276,6 +277,7 @@ export default function FaceLoginScreen() {
 
       // 🔊 Voice welcome message
       const driverName = result.user?.name || 'Driver';
+      Speech.stop();
       Speech.speak(`Welcome back, ${driverName}. Drive safely!`, {
         language: 'en-US',
         pitch: 1.0,

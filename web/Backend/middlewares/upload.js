@@ -17,7 +17,16 @@ const storage = multer.diskStorage({
     // Generate unique filename: timestamp_userId_random
     const userId = req.user && req.user._id ? req.user._id : 'anonymous';
     const uniqueSuffix = Date.now() + '_' + userId + '_' + Math.round(Math.random() * 1E9);
-    const fileExtension = path.extname(file.originalname);
+    
+    // Ensure we always have an extension
+    let fileExtension = path.extname(file.originalname);
+    if (!fileExtension) {
+      if (file.mimetype === 'image/jpeg') fileExtension = '.jpg';
+      else if (file.mimetype === 'image/png') fileExtension = '.png';
+      else if (file.mimetype === 'image/webp') fileExtension = '.webp';
+      else fileExtension = '.jpg'; // Fallback
+    }
+    
     cb(null, 'profile_' + uniqueSuffix + fileExtension);
   }
 });
@@ -29,7 +38,16 @@ const faceStorage = multer.diskStorage({
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '_' + Math.round(Math.random() * 1E9);
-    const fileExtension = path.extname(file.originalname);
+    
+    // Ensure we always have an extension
+    let fileExtension = path.extname(file.originalname);
+    if (!fileExtension) {
+      if (file.mimetype === 'image/jpeg') fileExtension = '.jpg';
+      else if (file.mimetype === 'image/png') fileExtension = '.png';
+      else if (file.mimetype === 'image/webp') fileExtension = '.webp';
+      else fileExtension = '.jpg'; // Fallback
+    }
+
     cb(null, 'face_' + uniqueSuffix + fileExtension);
   }
 });

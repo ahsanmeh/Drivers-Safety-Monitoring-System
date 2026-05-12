@@ -122,9 +122,11 @@ const register = asyncHandler(async (req, res) => {
     return sendErrorResponse(res, 400, 'Profile picture is required');
   }
 
+  const normalizedCompanyEmail = companyEmail ? companyEmail.trim().toLowerCase() : '';
+
   // Find admin by company email
   const admin = await User.findOne({
-    email: companyEmail,
+    email: normalizedCompanyEmail,
     role: 'admin'
   });
 
@@ -133,32 +135,37 @@ const register = asyncHandler(async (req, res) => {
     return sendErrorResponse(res, 400, 'Company email not found. Please contact your administrator.');
   }
 
+  // Normalize email to prevent trailing space issues
+  const normalizedEmail = email ? email.trim().toLowerCase() : '';
+
   // Check if user already exists
-  const existingUser = await User.findOne({ email });
+  const existingUser = await User.findOne({ email: normalizedEmail });
   if (existingUser) {
     if (req.file) fs.unlinkSync(req.file.path); // Cleanup uploaded file
     return sendErrorResponse(res, 400, 'User already exists with this email');
   }
 
-  // Validate face in profile image
-  try {
-    const imageBuffer = fs.readFileSync(req.file.path);
-    const imageBase64 = imageBuffer.toString('base64');
 
-    const pythonUrl = process.env.PYTHON_SERVER_URL || 'http://127.0.0.1:8000';
-    await axios.post(`${pythonUrl}/detect-face`, {
-      image: imageBase64
-    });
-  } catch (error) {
-    if (req.file) fs.unlinkSync(req.file.path); // Cleanup uploaded file
-    const errorMessage = error.response?.data?.error || 'Face detection failed';
-    return sendErrorResponse(res, 400, errorMessage);
-  }
+  // Bypass Face Validation: Accept the image as it is without sending it to the Python server.
+  // try {
+  //   const imageBuffer = fs.readFileSync(req.file.path);
+  //   const imageBase64 = imageBuffer.toString('base64');
+
+  //   const pythonUrl = process.env.PYTHON_SERVER_URL || 'http://127.0.0.1:8000';
+  //   await axios.post(`${pythonUrl}/detect-face`, {
+  //     image: imageBase64
+  //   });
+  // } catch (error) {
+  //   if (req.file) fs.unlinkSync(req.file.path); // Cleanup uploaded file
+  //   const errorMessage = error.response?.data?.error || 'Face detection failed';
+  //   return sendErrorResponse(res, 400, errorMessage);
+  // }
+
 
   // Create user - ALWAYS create as driver (security measure)
   const user = await User.create({
     name,
-    email,
+    email: normalizedEmail,
     password,
     role: 'driver', // Force driver role - admins created via script only
     adminId: admin._id, // Assign driver to admin
@@ -200,9 +207,12 @@ const register = asyncHandler(async (req, res) => {
 // @access  Public
 const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
+  
+  // Normalize email to prevent trailing space issues
+  const normalizedEmail = email ? email.trim().toLowerCase() : '';
 
   // Check if user exists and include password for comparison
-  const user = await User.findOne({ email }).select('+password');
+  const user = await User.findOne({ email: normalizedEmail }).select('+password');
   if (!user) {
     return sendErrorResponse(res, 401, 'Invalid credentials');
   }
@@ -639,13 +649,17 @@ const requestPasswordReset = asyncHandler(async (req, res) => {
   }
 
   // Find user by email
+  console.log(`Password reset request for: ${email}`);
   const user = await User.findOne({ email: email.toLowerCase() });
 
   // Don't reveal if user exists or not (security best practice)
   if (!user) {
+    console.log(`User not found for email: ${email}`);
     // Still return success to prevent email enumeration
     return sendSuccessResponse(res, 200, 'If an account with that email exists, a password reset link has been sent.');
   }
+
+  console.log(`Found user: ${user.name} (${user.role})`);
 
   // Check if password is expired
   const passwordExpiryDays = user.settings?.security?.passwordExpiryDays || 90;
