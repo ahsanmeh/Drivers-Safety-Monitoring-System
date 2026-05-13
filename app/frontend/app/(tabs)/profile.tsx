@@ -1,6 +1,6 @@
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Modal, Linking, Image, Alert, Animated, PanResponder } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { User, Phone, Clock, Shield, AtSign } from 'lucide-react-native';
+import { User, Phone, Clock, Shield, Briefcase } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -363,7 +363,7 @@ export default function ProfileScreen() {
             <View style={styles.infoDivider} />
 
             <View style={styles.infoItem}>
-              <AtSign size={20} color="#6B7280" />
+              <Briefcase size={20} color="#6B7280" />
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>Company Email</Text>
                 <Text style={styles.infoValue}>{user?.adminEmail || 'support@company.com'}</Text>
