@@ -161,6 +161,22 @@ export async function updateIncidentLocation(token: string, incidentId: string, 
   return json.data;
 }
 
+export async function getProfile(token: string): Promise<any> {
+  const { res, json } = await customFetch(`${API_BASE_URL}/auth/me`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+  });
+
+  if (!res.ok || !json.success) {
+    throw new Error(json.message || 'Failed to fetch profile');
+  }
+
+  return json.data.user;
+}
+
 export async function updateProfile(token: string, data: any): Promise<any> {
   const { res, json } = await customFetch(`${API_BASE_URL}/auth/me`, {
     method: 'PUT',

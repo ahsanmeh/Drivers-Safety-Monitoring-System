@@ -32,11 +32,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setAuth = (state: AuthState) => {
+    const isNewLogin = !user && state.user;
     setUser(state.user);
     setToken(state.token);
 
-    // Start tracking if not already started
-    if (state.user && !startTime) {
+    // Start tracking if it's a new login OR if we don't have a startTime yet
+    if (state.user && (isNewLogin || !startTime)) {
       const now = Date.now();
       setStartTime(now);
       AsyncStorage.setItem(START_TIME_KEY, now.toString());

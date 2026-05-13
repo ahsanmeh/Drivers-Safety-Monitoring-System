@@ -1,12 +1,12 @@
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Modal, Linking, Image, Alert, Animated, PanResponder } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { User, Phone, Clock, Shield } from 'lucide-react-native';
+import { User, Phone, Clock, Shield, AtSign } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../lib/auth-context';
-import { API_ROOT, uploadProfileImage, updateProfile } from '../../lib/api';
+import { API_ROOT, uploadProfileImage, updateProfile, getProfile } from '../../lib/api';
 import { useAlerts } from '../../lib/AlertsContext';
 
 export default function ProfileScreen() {
@@ -64,6 +64,21 @@ export default function ProfileScreen() {
       setEditPhone(user.phone || '');
     }
   }, [user]);
+
+  // Refresh profile data on mount to get admin info
+  useEffect(() => {
+    const refreshProfile = async () => {
+      if (token) {
+        try {
+          const updatedUser = await getProfile(token);
+          setAuth({ user: updatedUser, token });
+        } catch (error) {
+          console.error('Failed to refresh profile:', error);
+        }
+      }
+    };
+    refreshProfile();
+  }, []);
 
   // Set up alert callback for safe trip tracking
   useEffect(() => {
@@ -334,26 +349,24 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Emergency Contacts</Text>
+          <Text style={styles.sectionTitle}>Company Information</Text>
 
           <View style={styles.infoCard}>
             <View style={styles.infoItem}>
               <User size={20} color="#6B7280" />
               <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Primary Contact</Text>
-                <Text style={styles.infoValue}>ali- brother</Text>
-                <Text style={styles.infoSubvalue}>02388483923</Text>
+                <Text style={styles.infoLabel}>Admin Name</Text>
+                <Text style={styles.infoValue}>{user?.adminName || 'Company Admin'}</Text>
               </View>
             </View>
 
             <View style={styles.infoDivider} />
 
             <View style={styles.infoItem}>
-              <User size={20} color="#6B7280" />
+              <AtSign size={20} color="#6B7280" />
               <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Secondary Contact</Text>
-                <Text style={styles.infoValue}>Emergency Services</Text>
-                <Text style={styles.infoSubvalue}>911</Text>
+                <Text style={styles.infoLabel}>Company Email</Text>
+                <Text style={styles.infoValue}>{user?.adminEmail || 'support@company.com'}</Text>
               </View>
             </View>
           </View>
